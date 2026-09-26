@@ -37,6 +37,37 @@ for code_point in range(0x10000):
 _RE_WWW = re.compile(r"\bwww\.", flags=re.IGNORECASE)
 _RE_DOMAINS = re.compile(r"\.(com|org|net|co|in|io|ai|biz|info)\b", flags=re.IGNORECASE)
 
+# Legal suffix patterns across English, Hindi, and French
+_LEGAL_PATTERNS = [
+    r"\bpvt\.?\s*ltd\.?\b",
+    r"\bprivate\s+limited\b",
+    r"\bpvt\b",
+    r"\bltd\.?\b",
+    r"\blimited\b",
+    r"\binc\.?\b",
+    r"\bincorporated\b",
+    r"\bcorp\.?\b",
+    r"\bcorporation\b",
+    r"\bllc\.?\b",
+    r"\bllp\.?\b",
+    r"\bl\.?l\.?c\.?\b",
+    r"\bl\.?l\.?p\.?\b",
+    r"\bco\.?\b",
+    r"\bcompany\b",
+    r"\bplc\.?\b",
+    r"\bgmbh\.?\b",
+    r"\bsarl\b",
+    r"\bsasu\b",
+    r"\bsas\b",
+    r"\beurl\b",
+    r"प्राइवेट\s+लिमिटेड",
+    r"प्रा\.?\s*लि\.?",
+    r"लिमिटेड",
+    r"एलएलपी",
+    r"कंपनी",
+]
+_RE_LEGAL = re.compile("|".join(_LEGAL_PATTERNS), flags=re.IGNORECASE | re.UNICODE)
+
 # Fast token mapping for standardizing common address words
 _ADDRESS_MAP = {
     "street": "st",
@@ -77,14 +108,21 @@ def normalize_text(text: Optional[str]) -> str:
     return " ".join(cleaned.split())
 
 
-def clean_name_string(text: Optional[str]) -> str:
-    """Normalize a business name string, removing domain noise while preserving legal terms."""
+def clean_name_string(text: Optional[str], strip_legal_forms: bool = True) -> str:
+    """Normalize a business name string, removing domain noise and standardizing legal suffixes."""
     if text is None or not isinstance(text, str) or not text.strip():
         return ""
     # Strip web prefix / domain extension
     s = _RE_WWW.sub("", text)
     s = _RE_DOMAINS.sub("", s)
-    # Apply standard text normalization (preserves legal terms and non-Latin scripts)
+
+    # Strip legal entity suffixes (English, Hindi, French)
+    if strip_legal_forms:
+        stripped = _RE_LEGAL.sub(" ", s)
+        if stripped.strip():
+            s = stripped
+
+    # Apply standard text normalization (preserves accents and non-Latin scripts)
     return normalize_text(s)
 
 
