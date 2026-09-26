@@ -1,0 +1,176 @@
+================================================================================
+           AWS ML CHALLENGE 2026 - PREPROCESSING AUDIT REPORT
+================================================================================
+
+Random Seed for Splitting: 42
+
+--------------------------------------------------------------------------------
+TRAIN / VALIDATION LEAKAGE VERIFICATION
+--------------------------------------------------------------------------------
+Train S1 Entities:     1,765,457
+Validation S1 Entities: 441,364
+Overlapping Entities:   0
+Leakage Status:         PASSED - ZERO OVERLAP (100% LEAK-FREE)
+
+--------------------------------------------------------------------------------
+DATASET AUDIT DETAILS
+--------------------------------------------------------------------------------
+
+[Train Source 1 (Full Normalized)]
+  Shape: 2,206,821 rows x 8 columns
+  Columns: entity_id, business_name, business_address, country, business_name_normalized, business_address_normalized, country_normalized, combined_text_normalized
+  Unique Entity IDs: 2,206,821 (Duplicates: 0)
+  Missing Values:
+    - entity_id: 0 (0.00%)
+    - business_name: 0 (0.00%)
+    - business_address: 0 (0.00%)
+    - country: 0 (0.00%)
+    - business_name_normalized: 0 (0.00%)
+    - business_address_normalized: 0 (0.00%)
+    - country_normalized: 0 (0.00%)
+    - combined_text_normalized: 0 (0.00%)
+  Country Distribution:
+    - US: 1,323,633 (59.98%)
+    - India: 883,188 (40.02%)
+
+[Train Source 1 (Train Split 80%)]
+  Shape: 1,765,457 rows x 8 columns
+  Columns: entity_id, business_name, business_address, country, business_name_normalized, business_address_normalized, country_normalized, combined_text_normalized
+  Unique Entity IDs: 1,765,457 (Duplicates: 0)
+  Missing Values:
+    - entity_id: 0 (0.00%)
+    - business_name: 0 (0.00%)
+    - business_address: 0 (0.00%)
+    - country: 0 (0.00%)
+    - business_name_normalized: 0 (0.00%)
+    - business_address_normalized: 0 (0.00%)
+    - country_normalized: 0 (0.00%)
+    - combined_text_normalized: 0 (0.00%)
+  Country Distribution:
+    - US: 1,059,001 (59.98%)
+    - India: 706,456 (40.02%)
+
+[Train Source 1 (Validation Split 20%)]
+  Shape: 441,364 rows x 8 columns
+  Columns: entity_id, business_name, business_address, country, business_name_normalized, business_address_normalized, country_normalized, combined_text_normalized
+  Unique Entity IDs: 441,364 (Duplicates: 0)
+  Missing Values:
+    - entity_id: 0 (0.00%)
+    - business_name: 0 (0.00%)
+    - business_address: 0 (0.00%)
+    - country: 0 (0.00%)
+    - business_name_normalized: 0 (0.00%)
+    - business_address_normalized: 0 (0.00%)
+    - country_normalized: 0 (0.00%)
+    - combined_text_normalized: 0 (0.00%)
+  Country Distribution:
+    - US: 264,632 (59.96%)
+    - India: 176,732 (40.04%)
+
+[Ground Truth (Train Split)]
+  Shape: 1,765,457 rows x 2 columns
+  Columns: source1_entity_id, matched_entity_ids
+  Unique Entity IDs: 1,765,457 (Duplicates: 0)
+  Missing Values:
+    - source1_entity_id: 0 (0.00%)
+    - matched_entity_ids: 98,431 (5.58%)
+
+[Ground Truth (Validation Split)]
+  Shape: 441,364 rows x 2 columns
+  Columns: source1_entity_id, matched_entity_ids
+  Unique Entity IDs: 441,364 (Duplicates: 0)
+  Missing Values:
+    - source1_entity_id: 0 (0.00%)
+    - matched_entity_ids: 24,816 (5.62%)
+
+[Train Source 2 (Sample Profile)]
+  Shape: 10,000 rows x 8 columns
+  Columns: entity_id, business_name, business_address, country, business_name_normalized, business_address_normalized, country_normalized, combined_text_normalized
+  Unique Entity IDs: 10,000 (Duplicates: 0)
+  Missing Values:
+    - entity_id: 0 (0.00%)
+    - business_name: 0 (0.00%)
+    - business_address: 337 (3.37%)
+    - country: 0 (0.00%)
+    - business_name_normalized: 0 (0.00%)
+    - business_address_normalized: 337 (3.37%)
+    - country_normalized: 0 (0.00%)
+    - combined_text_normalized: 0 (0.00%)
+  Country Distribution:
+    - US: 6,034 (60.34%)
+    - India: 3,966 (39.66%)
+
+[Train Source 3 (Sample Profile)]
+  Shape: 10,000 rows x 8 columns
+  Columns: entity_id, business_name, business_address, country, business_name_normalized, business_address_normalized, country_normalized, combined_text_normalized
+  Unique Entity IDs: 10,000 (Duplicates: 0)
+  Missing Values:
+    - entity_id: 0 (0.00%)
+    - business_name: 0 (0.00%)
+    - business_address: 350 (3.50%)
+    - country: 0 (0.00%)
+    - business_name_normalized: 0 (0.00%)
+    - business_address_normalized: 350 (3.50%)
+    - country_normalized: 0 (0.00%)
+    - combined_text_normalized: 0 (0.00%)
+  Country Distribution:
+    - US: 5,905 (59.05%)
+    - India: 4,095 (40.95%)
+
+[Test Source 1 (Sample Profile)]
+  Shape: 10,000 rows x 8 columns
+  Columns: entity_id, business_name, business_address, country, business_name_normalized, business_address_normalized, country_normalized, combined_text_normalized
+  Unique Entity IDs: 10,000 (Duplicates: 0)
+  Missing Values:
+    - entity_id: 0 (0.00%)
+    - business_name: 0 (0.00%)
+    - business_address: 0 (0.00%)
+    - country: 0 (0.00%)
+    - business_name_normalized: 0 (0.00%)
+    - business_address_normalized: 0 (0.00%)
+    - country_normalized: 0 (0.00%)
+    - combined_text_normalized: 0 (0.00%)
+  Country Distribution:
+    - India: 4,619 (46.19%)
+    - US: 3,891 (38.91%)
+    - France: 1,490 (14.90%)
+
+[Test Source 2 (Sample Profile)]
+  Shape: 10,000 rows x 8 columns
+  Columns: entity_id, business_name, business_address, country, business_name_normalized, business_address_normalized, country_normalized, combined_text_normalized
+  Unique Entity IDs: 10,000 (Duplicates: 0)
+  Missing Values:
+    - entity_id: 0 (0.00%)
+    - business_name: 0 (0.00%)
+    - business_address: 277 (2.77%)
+    - country: 0 (0.00%)
+    - business_name_normalized: 0 (0.00%)
+    - business_address_normalized: 277 (2.77%)
+    - country_normalized: 0 (0.00%)
+    - combined_text_normalized: 0 (0.00%)
+  Country Distribution:
+    - India: 4,749 (47.49%)
+    - US: 3,802 (38.02%)
+    - France: 1,449 (14.49%)
+
+[Test Source 3 (Sample Profile)]
+  Shape: 10,000 rows x 8 columns
+  Columns: entity_id, business_name, business_address, country, business_name_normalized, business_address_normalized, country_normalized, combined_text_normalized
+  Unique Entity IDs: 10,000 (Duplicates: 0)
+  Missing Values:
+    - entity_id: 0 (0.00%)
+    - business_name: 0 (0.00%)
+    - business_address: 274 (2.74%)
+    - country: 0 (0.00%)
+    - business_name_normalized: 0 (0.00%)
+    - business_address_normalized: 274 (2.74%)
+    - country_normalized: 0 (0.00%)
+    - combined_text_normalized: 0 (0.00%)
+  Country Distribution:
+    - India: 4,716 (47.16%)
+    - US: 3,849 (38.49%)
+    - France: 1,435 (14.35%)
+
+================================================================================
+END OF PREPROCESSING REPORT
+================================================================================

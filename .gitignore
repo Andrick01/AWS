@@ -1,0 +1,7 @@
+*.tsv
+Train/
+test/
+artifacts/preprocessing/*.tsv
+__pycache__/
+*.pyc
+.DS_Store
