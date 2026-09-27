@@ -95,10 +95,12 @@ class TFIDFBlocker:
         candidate_ids_arr = np.array(self.candidate_ids)
         candidate_countries_arr = np.array(self.candidate_countries)
 
-        batch_size = 1000  # 1000 rows per batch keeps memory under 300MB per matrix dot product
+        batch_size = 500
+        unique_cand_countries = set(candidate_countries_arr)
+        needs_country_filter = len(unique_cand_countries) > 1
 
         for i in range(0, n_queries, batch_size):
-            if i > 0 and i % 50000 == 0:
+            if i > 0 and i % 5000 == 0:
                 logger.info("  TF-IDF query progress: %d / %d (%.1f%%)", i, n_queries, i / n_queries * 100)
             b_ids = query_ids[i : i + batch_size]
             b_texts = query_texts[i : i + batch_size]
@@ -128,8 +130,8 @@ class TFIDFBlocker:
                 col_indices = col_indices[valid_mask]
                 similarities = similarities[valid_mask]
 
-                # Filter by matching country if provided
-                if q_country and q_country != "":
+                # Filter by matching country if needed across multi-country candidate set
+                if needs_country_filter and q_country and q_country != "":
                     cand_c = candidate_countries_arr[col_indices]
                     country_mask = (cand_c == "") | (cand_c == q_country)
                     col_indices = col_indices[country_mask]
