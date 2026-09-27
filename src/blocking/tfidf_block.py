@@ -35,8 +35,8 @@ class TFIDFBlocker:
         self.vectorizer = TfidfVectorizer(
             analyzer="word",
             ngram_range=self.ngram_range,
-            min_df=max(self.min_df, 2),
-            max_features=250000,
+            min_df=max(self.min_df, 3),
+            max_features=50000,
             stop_words=stop_words,
             dtype=np.float32,
             norm="l2",
@@ -58,8 +58,8 @@ class TFIDFBlocker:
         self.candidate_countries = candidate_df[country_col].fillna("").astype(str).tolist()
 
         texts = candidate_df[text_col].fillna("").astype(str).tolist()
-        # candidate_matrix in CSC format allows fast multiplication: candidate_matrix.dot(q_T)
-        self.candidate_matrix = self.vectorizer.fit_transform(texts).tocsc()
+        # Keep candidate_matrix as CSR format for fast matrix multiplication
+        self.candidate_matrix = self.vectorizer.fit_transform(texts)
         logger.info(
             "TF-IDF matrix built: %d records, %d n-gram features.",
             self.candidate_matrix.shape[0],
@@ -90,27 +90,29 @@ class TFIDFBlocker:
         candidate_ids_arr = np.array(self.candidate_ids)
         candidate_countries_arr = np.array(self.candidate_countries)
 
+        batch_size = 10000  # Increased batch size for fast vectorized sparse matrix operations
+
         for i in range(0, n_queries, batch_size):
-            if i > 0 and i % 25000 == 0:
+            if i > 0 and i % 50000 == 0:
                 logger.info("  TF-IDF query progress: %d / %d (%.1f%%)", i, n_queries, i / n_queries * 100)
             b_ids = query_ids[i : i + batch_size]
             b_texts = query_texts[i : i + batch_size]
             b_countries = query_countries[i : i + batch_size]
 
             q_matrix = self.vectorizer.transform(b_texts)
-            # cand (N, V) dot q.T (V, B) -> sim_csc (N, B)
-            sim_csc = self.candidate_matrix.dot(q_matrix.T).tocsc()
+            # Fast CSR matrix multiplication: (B, V) x (V, N) -> (B, N) CSR matrix
+            sim_csr = q_matrix.dot(self.candidate_matrix.T)
 
-            # For each column j corresponding to query entity j in batch
+            # For each query row j in batch
             for j, (q_id, q_country) in enumerate(zip(b_ids, b_countries)):
-                start = sim_csc.indptr[j]
-                end = sim_csc.indptr[j + 1]
+                start = sim_csr.indptr[j]
+                end = sim_csr.indptr[j + 1]
                 if start == end:
                     candidates_per_query[q_id] = set()
                     continue
 
-                col_indices = sim_csc.indices[start:end]
-                similarities = sim_csc.data[start:end]
+                col_indices = sim_csr.indices[start:end]
+                similarities = sim_csr.data[start:end]
 
                 # Filter by similarity threshold
                 valid_mask = similarities >= self.min_similarity
