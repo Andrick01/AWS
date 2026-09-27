@@ -30,8 +30,13 @@ class TFIDFBlocker:
         self.top_k = top_k
         self.min_similarity = min_similarity
 
-        # Common high-frequency address tokens that should not trigger false-positive candidate retrieval alone
-        stop_words = ["st", "rd", "ave", "dr", "ln", "blvd", "apt", "ste", "fl", "us", "india", "france"]
+        # Common high-frequency address tokens that would trigger false-positive
+        # candidate retrieval alone (layout abbreviations, not country-specific names).
+        # Country names are intentionally NOT listed here: country-based filtering is
+        # handled by the per-country partition logic in query_batch, which compares the
+        # actual country value generically. Hardcoding country names here would break
+        # for any country absent from this list.
+        stop_words = ["st", "rd", "ave", "dr", "ln", "blvd", "apt", "ste", "fl"]
         self.vectorizer = TfidfVectorizer(
             analyzer="word",
             ngram_range=self.ngram_range,
@@ -90,7 +95,7 @@ class TFIDFBlocker:
         candidate_ids_arr = np.array(self.candidate_ids)
         candidate_countries_arr = np.array(self.candidate_countries)
 
-        batch_size = 10000  # Increased batch size for fast vectorized sparse matrix operations
+        batch_size = 1000  # 1000 rows per batch keeps memory under 300MB per matrix dot product
 
         for i in range(0, n_queries, batch_size):
             if i > 0 and i % 50000 == 0:

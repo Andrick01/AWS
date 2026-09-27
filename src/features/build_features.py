@@ -69,8 +69,8 @@ def build_pair_features(
         "addr_exact_match", "addr_seq_ratio", "addr_token_jaccard",
         "addr_token_overlap_ratio", "addr_numeric_exact_match", "addr_numeric_overlap_ratio",
         "addr_has_both_address",
-        # Country / Source features
-        "country_match", "country_mismatch", "is_us", "is_india", "is_france",
+        # Country / Source features — generic, no specific country names
+        "country_match", "country_mismatch",
         "is_source2", "is_source3",
     ]
 

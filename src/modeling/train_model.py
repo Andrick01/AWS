@@ -31,7 +31,10 @@ if hasattr(sys.stdout, "reconfigure"):
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
 
-# Feature columns used for training (must match build_features.py output)
+# Feature columns used for training (must match build_features.py output exactly).
+# Country is handled generically via country_match / country_mismatch — no
+# country-specific columns exist, so the model handles any unseen country without
+# retraining or code changes.
 FEATURE_COLS = [
     "name_exact_match", "name_seq_ratio", "name_jaro_winkler",
     "name_levenshtein_sim", "name_token_jaccard", "name_token_overlap_ratio",
@@ -39,7 +42,7 @@ FEATURE_COLS = [
     "addr_exact_match", "addr_seq_ratio", "addr_token_jaccard",
     "addr_token_overlap_ratio", "addr_numeric_exact_match", "addr_numeric_overlap_ratio",
     "addr_has_both_address",
-    "country_match", "country_mismatch", "is_us", "is_india", "is_france",
+    "country_match", "country_mismatch",
     "is_source2", "is_source3",
 ]
 

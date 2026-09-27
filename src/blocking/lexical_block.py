@@ -65,15 +65,13 @@ def extract_blocking_tokens(
 
 
 class LexicalBlocker:
-    """Builds an inverted index of candidate entities and retrieves lexical matches."""
+    """Builds a country-partitioned inverted index of candidate entities and retrieves lexical matches."""
 
     def __init__(self, prefix_len: int = 4, min_token_len: int = 3):
         self.prefix_len = prefix_len
         self.min_token_len = min_token_len
-        # Maps blocking_key -> set of candidate entity_ids
-        self.index: Dict[str, Set[str]] = defaultdict(set)
-        # Maps entity_id -> country (for country isolation)
-        self.candidate_countries: Dict[str, str] = {}
+        # Maps country -> blocking_key -> set of candidate entity_ids
+        self.country_index: Dict[str, Dict[str, Set[str]]] = defaultdict(lambda: defaultdict(set))
 
     def fit(
         self,
@@ -84,14 +82,9 @@ class LexicalBlocker:
         country_col: str = "country_normalized",
         max_bucket_size: int = 5000,
     ) -> "LexicalBlocker":
-        """Index candidate records (Source 2 and Source 3).
-        
-        max_bucket_size: drop any index key whose bucket exceeds this size
-        (these are too generic to be useful for blocking and cause O(n) blowup).
-        """
+        """Index candidate records (Source 2 and Source 3) partitioned by country."""
         logger.info("Building lexical index for %d candidate records...", len(candidate_df))
-        self.index.clear()
-        self.candidate_countries.clear()
+        self.country_index.clear()
 
         ids = candidate_df[id_col].astype(str).tolist()
         names = candidate_df[name_col].fillna("").astype(str).tolist()
@@ -99,7 +92,7 @@ class LexicalBlocker:
         countries = candidate_df[country_col].fillna("").astype(str).tolist()
 
         for c_id, name, addr, country in zip(ids, names, addrs, countries):
-            self.candidate_countries[c_id] = country
+            c_key = country.strip().lower() if country else "ALL"
             keys = extract_blocking_tokens(
                 name,
                 address=addr,
@@ -107,16 +100,17 @@ class LexicalBlocker:
                 prefix_len=self.prefix_len,
             )
             for k in keys:
-                self.index[k].add(c_id)
+                self.country_index[c_key][k].add(c_id)
 
-        # Prune hot keys — buckets that are too large are too generic to help
-        hot_keys = [k for k, v in self.index.items() if len(v) > max_bucket_size]
-        for k in hot_keys:
-            del self.index[k]
-        if hot_keys:
-            logger.info("Pruned %d hot index keys (bucket size > %d).", len(hot_keys), max_bucket_size)
+        # Prune hot keys per country
+        total_keys = 0
+        for c_key, idx in self.country_index.items():
+            hot_keys = [k for k, v in idx.items() if len(v) > max_bucket_size]
+            for k in hot_keys:
+                del idx[k]
+            total_keys += len(idx)
 
-        logger.info("Lexical index built with %d unique keys.", len(self.index))
+        logger.info("Lexical index built with %d unique keys across %d country partitions.", total_keys, len(self.country_index))
         return self
 
     def query(
@@ -139,7 +133,7 @@ class LexicalBlocker:
         q_countries = query_df[country_col].fillna("").astype(str).tolist()
 
         for i, (q_id, name, addr, country) in enumerate(zip(q_ids, q_names, q_addrs, q_countries)):
-            if i > 0 and i % 50000 == 0:
+            if i > 0 and i % 250000 == 0:
                 logger.info("  Lexical query progress: %d / %d (%.1f%%)", i, total, i / total * 100)
 
             keys = extract_blocking_tokens(
@@ -148,20 +142,19 @@ class LexicalBlocker:
                 min_token_len=self.min_token_len,
                 prefix_len=self.prefix_len,
             )
+
+            c_key = country.strip().lower() if country else "ALL"
+            target_idx = self.country_index.get(c_key, {})
+            all_idx = self.country_index.get("ALL", {})
+
             matched_candidates: Set[str] = set()
-
             for k in keys:
-                matched_candidates.update(self.index.get(k, ()))
+                if k in target_idx:
+                    matched_candidates.update(target_idx[k])
+                if k in all_idx and c_key != "ALL":
+                    matched_candidates.update(all_idx[k])
 
-            # If country is present, filter candidates by matching country
-            if country and country != "":
-                matched_candidates = {
-                    c for c in matched_candidates
-                    if self.candidate_countries.get(c, "") == "" or self.candidate_countries.get(c, "") == country
-                }
-
-            # Cap maximum candidates per query
-            if len(matched_candidates) > max_candidates_per_query:
+            if max_candidates_per_query and len(matched_candidates) > max_candidates_per_query:
                 matched_candidates = set(list(matched_candidates)[:max_candidates_per_query])
 
             candidates_per_query[q_id] = matched_candidates
