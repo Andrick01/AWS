@@ -176,6 +176,7 @@ def _process_partition(
     use_tfidf: bool,
     work_dir: Path,
     partition_name: str,
+    lexical_max_k: int = 15,
 ) -> Tuple[Dict[str, List[str]], Dict[str, List[str]]]:
     """Block + feature + score one country partition; return cand/match maps."""
     cand_map: Dict[str, List[str]] = {}
@@ -188,11 +189,12 @@ def _process_partition(
         return cand_map, match_map
 
     logger.info(
-        "[%s] S1=%d candidates=%d (tfidf=%s)",
+        "[%s] S1=%d candidates=%d (tfidf=%s, max_k=%d)",
         partition_name,
         len(s1_df),
         len(candidates_df),
         use_tfidf,
+        lexical_max_k,
     )
 
     # Fit blockers ONCE per country partition (critical for runtime)
@@ -216,7 +218,7 @@ def _process_partition(
             len(s1_df),
         )
 
-        chunk_cands = _block_chunk(chunk, lexical, tfidf)
+        chunk_cands = _block_chunk(chunk, lexical, tfidf, lexical_max_k=lexical_max_k)
 
         flat_path = work_dir / f"{partition_name}_flat_{start}.tsv"
         feat_path = work_dir / f"{partition_name}_feat_{start}.tsv"
@@ -273,6 +275,7 @@ def run_test_inference(
     preprocessed_dir: Optional[Path] = None,
     s1_chunk_size: int = 25_000,
     use_tfidf: bool = True,
+    lexical_max_k: int = 15,
 ) -> None:
     """Run memory-aware end-to-end inference on the test dataset."""
     logger.info("==================================================")
@@ -336,6 +339,7 @@ def run_test_inference(
                 use_tfidf=use_tfidf,
                 work_dir=work_dir,
                 partition_name=country or "all",
+                lexical_max_k=lexical_max_k,
             )
             all_cands.update(cand_map)
             all_matches.update(match_map)
@@ -392,6 +396,12 @@ def main():
         action="store_true",
         help="Disable TF-IDF blocking to reduce peak memory",
     )
+    parser.add_argument(
+        "--lexical-max-k",
+        type=int,
+        default=15,
+        help="Max candidates per S1 entity from lexical index",
+    )
     args = parser.parse_args()
 
     run_test_inference(
@@ -403,6 +413,7 @@ def main():
         preprocessed_dir=args.preprocessed_dir,
         s1_chunk_size=args.s1_chunk_size,
         use_tfidf=not args.lexical_only,
+        lexical_max_k=args.lexical_max_k,
     )
 
 

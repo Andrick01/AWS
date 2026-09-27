@@ -147,17 +147,21 @@ class LexicalBlocker:
             target_idx = self.country_index.get(c_key, {})
             all_idx = self.country_index.get("ALL", {})
 
-            matched_candidates: Set[str] = set()
+            cand_scores: Dict[str, int] = defaultdict(int)
             for k in keys:
-                if k in target_idx:
-                    matched_candidates.update(target_idx[k])
-                if k in all_idx and c_key != "ALL":
-                    matched_candidates.update(all_idx[k])
+                weight = 10 if k.startswith("exact:") else (5 if k.startswith("num_name:") else (3 if k.startswith("tok:") else 1))
+                if k in target_idx and len(target_idx[k]) <= 1000:
+                    for cid in target_idx[k]:
+                        cand_scores[cid] += weight
+                if k in all_idx and c_key != "ALL" and len(all_idx[k]) <= 1000:
+                    for cid in all_idx[k]:
+                        cand_scores[cid] += weight
 
-            if max_candidates_per_query and len(matched_candidates) > max_candidates_per_query:
-                matched_candidates = set(list(matched_candidates)[:max_candidates_per_query])
-
-            candidates_per_query[q_id] = matched_candidates
+            if max_candidates_per_query and len(cand_scores) > max_candidates_per_query:
+                top_cands = sorted(cand_scores.keys(), key=lambda c: -cand_scores[c])[:max_candidates_per_query]
+                candidates_per_query[q_id] = set(top_cands)
+            else:
+                candidates_per_query[q_id] = set(cand_scores.keys())
 
         logger.info("Lexical query complete: %d queries processed.", total)
         return candidates_per_query

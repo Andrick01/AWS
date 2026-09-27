@@ -47,6 +47,50 @@ def load_entity_attributes(df: pd.DataFrame) -> Dict[str, Tuple[str, str, str]]:
     return lookup
 
 
+_GLOBAL_S1_LOOKUP: Dict[str, Tuple[str, str, str]] = {}
+_GLOBAL_CAND_LOOKUP: Dict[str, Tuple[str, str, str]] = {}
+
+
+def _init_worker(s1_lookup, cand_lookup):
+    global _GLOBAL_S1_LOOKUP, _GLOBAL_CAND_LOOKUP
+    _GLOBAL_S1_LOOKUP = s1_lookup
+    _GLOBAL_CAND_LOOKUP = cand_lookup
+
+
+def _process_feature_batch(args):
+    rows_chunk, s1_lookup, cand_lookup, feature_names, has_label = args
+    results = []
+    for row in rows_chunk:
+        s1_id = row.get("source1_entity_id", "").strip()
+        c_id = row.get("candidate_entity_id", "").strip()
+        if not s1_id or not c_id:
+            continue
+
+        s1_attr = s1_lookup.get(s1_id, ("", "", ""))
+        c_attr = cand_lookup.get(c_id, ("", "", ""))
+
+        n_feats = compute_name_features(s1_attr[0], c_attr[0])
+        a_feats = compute_address_features(s1_attr[1], c_attr[1])
+        c_feats = compute_country_features(s1_attr[2], c_attr[2], candidate_id=c_id)
+
+        row_values = [s1_id, c_id]
+        for f in feature_names:
+            if f in n_feats:
+                row_values.append(round(n_feats[f], 4))
+            elif f in a_feats:
+                row_values.append(round(a_feats[f], 4))
+            elif f in c_feats:
+                row_values.append(round(c_feats[f], 4))
+            else:
+                row_values.append(0.0)
+
+        if has_label:
+            row_values.append(int(row.get("label", 0)))
+
+        results.append(row_values)
+    return results
+
+
 def build_pair_features(
     pairs_tsv: Path,
     s1_lookup: Dict[str, Tuple[str, str, str]],
@@ -56,7 +100,10 @@ def build_pair_features(
     has_label: bool = True,
     max_pairs: Optional[int] = None,
 ) -> int:
-    """Stream pairwise dataset, compute all feature metrics, and write feature matrix to TSV."""
+    """Stream pairwise dataset, compute all feature metrics in parallel, and write feature matrix to TSV."""
+    import os
+    from concurrent.futures import ThreadPoolExecutor
+
     output_tsv.parent.mkdir(parents=True, exist_ok=True)
     logger.info("Extracting pairwise features: %s -> %s", pairs_tsv, output_tsv)
 
@@ -78,53 +125,44 @@ def build_pair_features(
     if has_label:
         header.append("label")
 
-    total_pairs = 0
+    with open(pairs_tsv, "r", encoding="utf-8", errors="replace") as in_f:
+        reader = list(csv.DictReader(in_f, delimiter="\t"))
 
-    with open(pairs_tsv, "r", encoding="utf-8", errors="replace") as in_f, \
-         open(output_tsv, "w", encoding="utf-8", newline="") as out_f:
+    if max_pairs:
+        reader = reader[:max_pairs]
 
-        reader = csv.DictReader(in_f, delimiter="\t")
+    total_pairs = len(reader)
+    if total_pairs == 0:
+        with open(output_tsv, "w", encoding="utf-8", newline="") as out_f:
+            csv.writer(out_f, delimiter="\t").writerow(header)
+        return 0
+
+    sub_chunk_size = 25000
+    sub_chunks = [reader[i : i + sub_chunk_size] for i in range(0, total_pairs, sub_chunk_size)]
+    tasks = [(sc, s1_lookup, cand_lookup, feature_names, has_label) for sc in sub_chunks]
+
+    num_workers = 14
+    logger.info("Parallel feature extraction across %d threads...", num_workers)
+
+    written_count = 0
+    with open(output_tsv, "w", encoding="utf-8", newline="") as out_f:
         writer = csv.writer(out_f, delimiter="\t")
         writer.writerow(header)
 
-        for row in reader:
-            s1_id = row.get("source1_entity_id", "").strip()
-            c_id = row.get("candidate_entity_id", "").strip()
-            if not s1_id or not c_id:
-                continue
+        if len(tasks) <= 1 or num_workers <= 1:
+            for task in tasks:
+                res_rows = _process_feature_batch(task)
+                writer.writerows(res_rows)
+                written_count += len(res_rows)
+        else:
+            with ThreadPoolExecutor(max_workers=num_workers) as executor:
+                for res_rows in executor.map(_process_feature_batch, tasks):
+                    writer.writerows(res_rows)
+                    written_count += len(res_rows)
+                    logger.info("  Parallel progress: %d / %d pairs (%.1f%%)", written_count, total_pairs, written_count / total_pairs * 100)
 
-            total_pairs += 1
-            if max_pairs and total_pairs > max_pairs:
-                break
-
-            s1_attr = s1_lookup.get(s1_id, ("", "", ""))
-            c_attr = cand_lookup.get(c_id, ("", "", ""))
-
-            n_feats = compute_name_features(s1_attr[0], c_attr[0])
-            a_feats = compute_address_features(s1_attr[1], c_attr[1])
-            c_feats = compute_country_features(s1_attr[2], c_attr[2], candidate_id=c_id)
-
-            row_values = [s1_id, c_id]
-            for f in feature_names:
-                if f in n_feats:
-                    row_values.append(round(n_feats[f], 4))
-                elif f in a_feats:
-                    row_values.append(round(a_feats[f], 4))
-                elif f in c_feats:
-                    row_values.append(round(c_feats[f], 4))
-                else:
-                    row_values.append(0.0)
-
-            if has_label:
-                row_values.append(int(row.get("label", 0)))
-
-            writer.writerow(row_values)
-
-            if total_pairs % batch_size == 0:
-                logger.info("Extracted features for %d pairs...", total_pairs)
-
-    logger.info("Feature extraction complete: %d total pairs -> %s", total_pairs, output_tsv)
-    return total_pairs
+    logger.info("Feature extraction complete: %d total pairs -> %s", written_count, output_tsv)
+    return written_count
 
 
 def main():

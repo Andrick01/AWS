@@ -3,9 +3,9 @@
 Computes street number overlap, token Jaccard, fuzzy sequence ratio, and length features.
 """
 
-from difflib import SequenceMatcher
 import re
 from typing import Dict, List, Set
+from rapidfuzz import fuzz
 
 
 def _extract_numbers(text: str) -> Set[str]:
@@ -32,8 +32,8 @@ def compute_address_features(addr1: str, addr2: str) -> Dict[str, float]:
     # 1. Exact match
     exact_match = 1.0 if a1 == a2 else 0.0
 
-    # 2. SequenceMatcher ratio
-    seq_ratio = SequenceMatcher(None, a1, a2).ratio()
+    # 2. Sequence ratio using fast C++ rapidfuzz
+    seq_ratio = fuzz.ratio(a1, a2) / 100.0
 
     # 3. Token Jaccard & Token Overlap
     tokens1 = set(a1.split())
