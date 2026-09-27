@@ -184,6 +184,42 @@ def train_xgboost(
     return model
 
 
+class EnsembleModel:
+    """Ensemble model combining LightGBM (MIT License) and XGBoost (Apache 2.0 License)."""
+
+    def __init__(self, lgb_model: object, xgb_model: object, lgb_weight: float = 0.5):
+        self.lgb_model = lgb_model
+        self.xgb_model = xgb_model
+        self.lgb_weight = lgb_weight
+        self.xgb_weight = 1.0 - lgb_weight
+
+    def predict(self, X: np.ndarray) -> np.ndarray:
+        s_lgb = predict_scores(self.lgb_model, X)
+        s_xgb = predict_scores(self.xgb_model, X)
+        return self.lgb_weight * s_lgb + self.xgb_weight * s_xgb
+
+
+def train_ensemble(
+    X_train: np.ndarray,
+    y_train: np.ndarray,
+    X_val: Optional[np.ndarray] = None,
+    y_val: Optional[np.ndarray] = None,
+    lgb_weight: float = 0.5,
+) -> EnsembleModel:
+    """Train both LightGBM and XGBoost models and return a 2-model ensemble."""
+    logger.info("==================================================")
+    logger.info("  TRAINING 2-MODEL ENSEMBLE (LightGBM + XGBoost)  ")
+    logger.info("==================================================")
+    logger.info("Model 1: LightGBM (License: MIT)")
+    lgb_model = train_lightgbm(X_train, y_train, X_val, y_val)
+
+    logger.info("Model 2: XGBoost (License: Apache 2.0)")
+    xgb_model = train_xgboost(X_train, y_train, X_val, y_val)
+
+    logger.info("Ensembling LightGBM (weight=%.2f) + XGBoost (weight=%.2f)", lgb_weight, 1.0 - lgb_weight)
+    return EnsembleModel(lgb_model, xgb_model, lgb_weight=lgb_weight)
+
+
 def save_model(model: object, output_path: Path) -> None:
     """Serialize trained model to disk."""
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -192,16 +228,27 @@ def save_model(model: object, output_path: Path) -> None:
     logger.info("Model saved to %s", output_path)
 
 
+class CustomUnpickler(pickle.Unpickler):
+    """Custom unpickler to handle EnsembleModel references cleanly across modules."""
+    def find_class(self, module, name):
+        if name == "EnsembleModel":
+            return EnsembleModel
+        return super().find_class(module, name)
+
+
 def load_model(model_path: Path) -> object:
     """Deserialize trained model from disk."""
     with open(model_path, "rb") as f:
-        model = pickle.load(f)
+        model = CustomUnpickler(f).load()
     logger.info("Model loaded from %s", model_path)
     return model
 
 
 def predict_scores(model: object, X: np.ndarray) -> np.ndarray:
-    """Generate match probability scores using trained model."""
+    """Generate match probability scores using trained model or ensemble."""
+    if hasattr(model, "lgb_model") and hasattr(model, "xgb_model"):
+        return model.predict(X)
+
     try:
         import lightgbm as lgb
         if isinstance(model, lgb.Booster):
@@ -217,15 +264,15 @@ def predict_scores(model: object, X: np.ndarray) -> np.ndarray:
     except ImportError:
         pass
 
-    raise ValueError("Unknown model type. Expected LightGBM Booster or XGBoost Booster.")
+    raise ValueError("Unknown model type. Expected LightGBM Booster, XGBoost Booster, or EnsembleModel.")
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Train Entity Resolution Classifier")
+    parser = argparse.ArgumentParser(description="Train Entity Resolution Classifier / Ensemble")
     parser.add_argument("--train-features", type=Path, default=PROJECT_ROOT / "artifacts" / "pair_features.tsv")
     parser.add_argument("--val-features", type=Path, default=None, help="Optional validation feature set")
     parser.add_argument("--model-output", type=Path, default=PROJECT_ROOT / "models" / "final_model" / "model.pkl")
-    parser.add_argument("--engine", type=str, choices=["lightgbm", "xgboost"], default="lightgbm")
+    parser.add_argument("--engine", type=str, choices=["ensemble", "lightgbm", "xgboost"], default="ensemble")
     parser.add_argument("--max-train-rows", type=int, default=None)
     parser.add_argument("--max-val-rows", type=int, default=None)
     args = parser.parse_args()
@@ -243,7 +290,9 @@ def main():
         gc.collect()
 
     # Train
-    if args.engine == "lightgbm":
+    if args.engine == "ensemble":
+        model = train_ensemble(X_train, y_train, X_val, y_val)
+    elif args.engine == "lightgbm":
         model = train_lightgbm(X_train, y_train, X_val, y_val)
     else:
         model = train_xgboost(X_train, y_train, X_val, y_val)
