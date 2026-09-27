@@ -33,25 +33,36 @@ for code_point in range(0x10000):
     if not cat.startswith(("L", "N", "M")):
         _PUNCT_TABLE[code_point] = 32  # ASCII space ord(' ')
 
-# Standard legal entity abbreviation mapping (English & Indic)
-# Canonicalizes verbose/varied suffixes without stripping distinct business descriptors
-_LEGAL_SUFFIX_MAP = {
-    "incorporated": "inc",
-    "corporation": "corp",
-    "limited": "ltd",
-    "private": "pvt",
-    "company": "co",
-    "लिमिटेड": "ltd",
-    "प्राइवेट": "pvt",
-    "कंपनी": "co",
-}
-
-# Regex for common legal terms that should be standardized as tokens
-_RE_LEGAL_TOKEN = re.compile(
-    r"\b(incorporated|corporation|limited|private|company|pvt\.?|ltd\.?|inc\.?|corp\.?|llc\.?|llp\.?|co\.?)\b|"
-    r"(प्राइवेट|लिमिटेड|कंपनी)",
-    flags=re.IGNORECASE | re.UNICODE,
-)
+# Multilingual legal suffix patterns (English, Hindi, French)
+_LEGAL_PATTERNS = [
+    r"\bpvt\.?\s*ltd\.?\b",
+    r"\bprivate\s+limited\b",
+    r"\bpvt\b",
+    r"\bltd\.?\b",
+    r"\blimited\b",
+    r"\binc\.?\b",
+    r"\bincorporated\b",
+    r"\bcorp\.?\b",
+    r"\bcorporation\b",
+    r"\bllc\.?\b",
+    r"\bllp\.?\b",
+    r"\bl\.?l\.?c\.?\b",
+    r"\bl\.?l\.?p\.?\b",
+    r"\bco\.?\b",
+    r"\bcompany\b",
+    r"\bplc\.?\b",
+    r"\bgmbh\.?\b",
+    r"\bsarl\b",
+    r"\bsasu\b",
+    r"\bsas\b",
+    r"\beurl\b",
+    r"प्राइवेट\s+लिमिटेड",
+    r"प्रा\.?\s*लि\.?",
+    r"लिमिटेड",
+    r"एलएलपी",
+    r"कंपनी",
+]
+_RE_LEGAL = re.compile("|".join(_LEGAL_PATTERNS), flags=re.IGNORECASE | re.UNICODE)
 
 # Regex for stripping domain extensions & web noise from business names
 _RE_WWW = re.compile(r"\bwww\.", flags=re.IGNORECASE)
@@ -97,25 +108,26 @@ def normalize_text(text: Optional[str]) -> str:
     return " ".join(cleaned.split())
 
 
-def clean_name_string(text: Optional[str]) -> str:
+def clean_name_string(text: Optional[str], strip_legal_forms: bool = True) -> str:
     """Normalize a business name string.
     
     - Strips domain noise (www., .com).
-    - Standardizes legal variants (e.g. 'incorporated' -> 'inc', 'limited' -> 'ltd').
-    - Preserves core business descriptors to avoid false merges.
+    - Strips legal entity suffixes (English, Hindi, French: SARL, SASU, EURL, Pvt Ltd, Inc, etc.).
+    - Applies standard text normalization (preserves accents and non-Latin scripts).
     """
     if text is None or not isinstance(text, str) or not text.strip():
         return ""
     # Strip web prefix / domain extension
     s = _RE_WWW.sub("", text)
     s = _RE_DOMAINS.sub("", s)
-    cleaned = normalize_text(s)
-    if not cleaned:
-        return ""
 
-    tokens = cleaned.split()
-    standardized = [_LEGAL_SUFFIX_MAP.get(tok, tok) for tok in tokens]
-    return " ".join(standardized)
+    # Strip legal entity suffixes (English, Hindi, French)
+    if strip_legal_forms:
+        stripped = _RE_LEGAL.sub(" ", s)
+        if stripped.strip():
+            s = stripped
+
+    return normalize_text(s)
 
 
 def clean_address_string(text: Optional[str]) -> str:
